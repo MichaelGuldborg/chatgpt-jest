@@ -11,9 +11,21 @@ const api = new ChatGPTUnofficialProxyAPI({
 })
 
 const args: string[] = process.argv;
-const disable = false;
+const disabled = false;
 const path = args[args.length - 1] ?? './src'
 
+const regex = /(```[\S\s]*?```)/g;
+const sanitize = (s: string) => {
+    // find code snippet
+    const matches = s.match(regex);
+    const snippet = matches?.[0].toString();
+    if (!snippet) return undefined;
+
+    // remove first and last line
+    const lines = snippet?.split('\n');
+    return lines.slice(1, lines.length - 1).join('\n');
+
+}
 
 const createTestFile = async (filepath: string) => {
     const outputPath = filepath.replace('.ts', '.test.ts');
@@ -22,15 +34,15 @@ const createTestFile = async (filepath: string) => {
     if (fs.existsSync(outputPath)) return;
 
     // perform a dry run
-    if (disable) return console.log(filepath);
+    if (disabled) return console.log(`DISABLED: ${filepath}`);
 
     const input = fs.readFileSync(filepath, {encoding: 'utf8'});
     const message = `Write a test with the jest library. The answer should only be a code snippet. The test should cover this code "\n${input}\n"`;
     const response = await api.sendMessage(message);
-    const startIndex = response.text.indexOf('```') + 3
-    const endIndex = response.text.lastIndexOf('```')
-    const output = response.text.substring(startIndex, endIndex);
+    const output = sanitize(response.text);
+    if (!output) return console.log(`INVALID: ${filepath}`);
     fs.writeFileSync(outputPath, output);
+    console.log(`CREATED: ${filepath}`);
 }
 
 const createTestFolder = async (path: string) => {
@@ -52,4 +64,5 @@ const createTestFolder = async (path: string) => {
 
 Promise.resolve().then(async () => {
     await createTestFolder(path);
+    console.log('COMPLETE');
 })
